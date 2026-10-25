@@ -175,15 +175,21 @@ Once **`PING TEST : ONLINE [OK]`** appears:
 
 ---
 
-## 🧪 Testing & Returning to Stock
+## 🧪 Testing & Reverting Netplay Settings
 
 Want to test the clean install experience or return your console to factory state without reflashing your MicroSD card?
 
-Run [`Reset_To_Stock.sh`](Reset_To_Stock.sh) from **TOOLS** (or via SSH terminal: `sudo bash Reset_To_Stock.sh`). It will:
+Run [`Revert_Netplay.sh`](Revert_Netplay.sh) from **TOOLS** (or via SSH terminal: `sudo bash Revert_Netplay.sh`). It will:
 1. Restore the original factory Device Tree (`dr_mode = "otg"`).
 2. Wipe generated `.dtb` profiles and role state files.
 3. Reset RetroArch Netplay settings back to default.
 4. Reboot the console into clean factory state.
+
+> [!NOTE]
+> ### 🛡️ 100% Safe — Games & Saves Are Untouched!
+> `Revert_Netplay.sh` does **NOT** format your SD card or erase any files.
+> * Your ROMs, saves, savestates, box art, BIOS files, and emulator settings are **completely untouched**.
+> * It strictly reverts the USB hardware mode and clears the Netplay setup memory.
 
 ---
 
