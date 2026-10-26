@@ -304,14 +304,14 @@ detect_role() {
         LOCAL_ROLE_STR="${C_YELLOW}[HOST]${C_RESET} ${C_WHITE}(192.168.10.1)${C_RESET}"
         PEER_ROLE_STR="${C_GREEN}[CLIENT]${C_RESET} ${C_GRAY}(192.168.10.2)${C_RESET}"
         SWITCH_ACTION_STR="${C_YELLOW}[X]${C_RESET} Make P2"
-        [ -f "$ROLE_FILE" ] && echo "host" | sudo tee "$ROLE_FILE" >/dev/null 2>&1
+        [ -f "$ROLE_FILE" ] && sudo sh -c "echo 'host' > '$ROLE_FILE'"
     else
         MY_IP="192.168.10.2"
         PEER_IP="192.168.10.1"
         LOCAL_ROLE_STR="${C_GREEN}[CLIENT]${C_RESET} ${C_WHITE}(192.168.10.2)${C_RESET}"
         PEER_ROLE_STR="${C_YELLOW}[HOST]${C_RESET} ${C_GRAY}(192.168.10.1)${C_RESET}"
         SWITCH_ACTION_STR="${C_YELLOW}[X]${C_RESET} Make P1"
-        [ -f "$ROLE_FILE" ] && echo "client" | sudo tee "$ROLE_FILE" >/dev/null 2>&1
+        [ -f "$ROLE_FILE" ] && sudo sh -c "echo 'client' > '$ROLE_FILE'"
     fi
 }
 
@@ -379,7 +379,7 @@ first_launch_wizard() {
         fi
 
         if [ "$chosen" == "host" ]; then
-            echo "host" | sudo tee "$ROLE_FILE" >/dev/null 2>&1
+            sudo sh -c "echo 'host' > '$ROLE_FILE'"
             sudo chown ark:ark "$ROLE_FILE" 2>/dev/null
             detect_role
             if [ "$ROLE" == "peripheral" ]; then
@@ -391,7 +391,9 @@ first_launch_wizard() {
                 echo -e " Rebooting into Host Mode in 3s...        "
                 echo -e "${C_CYAN}==========================================${C_RESET}"
                 sleep 3
+                sync
                 sudo reboot
+                exit 0
             else
                 sudo cp /boot/rk3326-g350-host.dtb /boot/rk3326-g350-linux.dtb 2>/dev/null
                 sync
@@ -404,7 +406,7 @@ first_launch_wizard() {
                 break
             fi
         elif [ "$chosen" == "client" ]; then
-            echo "client" | sudo tee "$ROLE_FILE" >/dev/null 2>&1
+            sudo sh -c "echo 'client' > '$ROLE_FILE'"
             sudo chown ark:ark "$ROLE_FILE" 2>/dev/null
             detect_role
             if [ "$ROLE" == "host" ]; then
@@ -416,7 +418,9 @@ first_launch_wizard() {
                 echo -e " Rebooting into Client Mode in 3s...      "
                 echo -e "${C_CYAN}==========================================${C_RESET}"
                 sleep 3
+                sync
                 sudo reboot
+                exit 0
             else
                 sudo cp /boot/rk3326-g350-peripheral.dtb /boot/rk3326-g350-linux.dtb 2>/dev/null
                 sync
@@ -471,7 +475,7 @@ switch_hardware_mode() {
         return 1
     fi
 
-    echo "$ROLE_VAL" | sudo tee "$ROLE_FILE" >/dev/null 2>&1
+    sudo sh -c "echo '$ROLE_VAL' > '$ROLE_FILE'"
     sudo chown ark:ark "$ROLE_FILE" 2>/dev/null
     sync
 
@@ -485,33 +489,37 @@ switch_hardware_mode() {
 
     for i in 5 4 3 2 1; do
         echo -ne " Rebooting in $i seconds... (Press B to cancel)\r"
-        if [ -f "$STATE_DIR/btn_b" ]; then
-            rm -f "$STATE_DIR/btn_b" 2>/dev/null
-            echo -e "\n${C_YELLOW}Reboot canceled. Returning to menu...${C_RESET}"
-            sleep 1.5
-            return 0
-        fi
-        if type Test_Button_B >/dev/null 2>&1; then
-            Test_Button_B
-            if [ "$?" -eq "10" ]; then
+        for _slice in {1..10}; do
+            if [ -f "$STATE_DIR/btn_b" ]; then
+                rm -f "$STATE_DIR/btn_b" 2>/dev/null
                 echo -e "\n${C_YELLOW}Reboot canceled. Returning to menu...${C_RESET}"
                 sleep 1.5
                 return 0
             fi
-        fi
-        read -t 1 -n 1 bk 2>/dev/null
-        case "$bk" in
-            [bB]|4)
-                echo -e "\n${C_YELLOW}Reboot canceled. Returning to menu...${C_RESET}"
-                sleep 1.5
-                return 0
-                ;;
-        esac
+            if type Test_Button_B >/dev/null 2>&1; then
+                Test_Button_B
+                if [ "$?" -eq "10" ]; then
+                    echo -e "\n${C_YELLOW}Reboot canceled. Returning to menu...${C_RESET}"
+                    sleep 1.5
+                    return 0
+                fi
+            fi
+            read -t 0.1 -n 1 bk 2>/dev/null
+            case "$bk" in
+                [bB]|4)
+                    echo -e "\n${C_YELLOW}Reboot canceled. Returning to menu...${C_RESET}"
+                    sleep 1.5
+                    return 0
+                    ;;
+            esac
+            sleep 0.1
+        done
     done
 
     echo -e "\n${C_GREEN}Rebooting now...${C_RESET}"
-    sleep 0.5
+    sync
     sudo reboot
+    exit 0
 }
 
 find_interface() {
@@ -604,23 +612,23 @@ patch_configs() {
         if [ -f "$cfg" ]; then
             grep -q "^netplay_use_relay_server" "$cfg" \
                 && sudo sed -i 's/^netplay_use_relay_server.*/netplay_use_relay_server = "false"/' "$cfg" \
-                || echo 'netplay_use_relay_server = "false"' | sudo tee -a "$cfg" >/dev/null
+                || sudo sh -c "echo 'netplay_use_relay_server = \"false\"' >> '$cfg'"
             grep -q "^netplay_nat_traversal" "$cfg" \
                 && sudo sed -i 's/^netplay_nat_traversal.*/netplay_nat_traversal = "false"/' "$cfg" \
-                || echo 'netplay_nat_traversal = "false"' | sudo tee -a "$cfg" >/dev/null
+                || sudo sh -c "echo 'netplay_nat_traversal = \"false\"' >> '$cfg'"
             grep -q "^netplay_public_announce" "$cfg" \
                 && sudo sed -i 's/^netplay_public_announce.*/netplay_public_announce = "false"/' "$cfg" \
-                || echo 'netplay_public_announce = "false"' | sudo tee -a "$cfg" >/dev/null
+                || sudo sh -c "echo 'netplay_public_announce = \"false\"' >> '$cfg'"
             grep -q "^netplay_ip_port" "$cfg" \
                 && sudo sed -i 's/^netplay_ip_port.*/netplay_ip_port = "55435"/' "$cfg" \
-                || echo 'netplay_ip_port = "55435"' | sudo tee -a "$cfg" >/dev/null
+                || sudo sh -c "echo 'netplay_ip_port = \"55435\"' >> '$cfg'"
             grep -q "^netplay_nickname" "$cfg" \
-                && sudo sed -i 's/^netplay_nickname.*/netplay_nickname = "'"$my_nick"'"/' "$cfg" \
-                || echo 'netplay_nickname = "'"$my_nick"'"' | sudo tee -a "$cfg" >/dev/null
+                && sudo sed -i 's/^netplay_nickname.*/netplay_nickname = \"'"$my_nick"'\"/' "$cfg" \
+                || sudo sh -c "echo 'netplay_nickname = \"$my_nick\"' >> '$cfg'"
             if [ "$ROLE" == "peripheral" ]; then
                 grep -q "^netplay_ip_address" "$cfg" \
-                    && sudo sed -i 's/^netplay_ip_address.*/netplay_ip_address = "'"$target_ip"'"/' "$cfg" \
-                    || echo 'netplay_ip_address = "'"$target_ip"'"' | sudo tee -a "$cfg" >/dev/null
+                    && sudo sed -i 's/^netplay_ip_address.*/netplay_ip_address = \"'"$target_ip"'\"/' "$cfg" \
+                    || sudo sh -c "echo 'netplay_ip_address = \"$target_ip\"' >> '$cfg'"
             fi
             sudo chown ark:ark "$cfg" 2>/dev/null
         fi
@@ -639,7 +647,7 @@ check_status() {
     NETPLAY_STATUS="${C_GRAY}WAITING FOR LINK...${C_RESET}"
     LOCAL_IP_STR="${C_GRAY}none${C_RESET}"
 
-    CUR_IPS=$(ip -4 -o addr show dev "$IFACE" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | grep '^192\.168\.10\.' | head -n 1)
+    CUR_IPS=$(ip -4 -o addr show dev "$IFACE" 2>/dev/null | awk '/inet 192\.168\.10\./ {split($4, a, "/"); print a[1]; exit}')
     [ -n "$CUR_IPS" ] && LOCAL_IP_STR="${C_WHITE}${CUR_IPS}${C_RESET}"
 
     if [ "$(cat "/sys/class/net/$IFACE/carrier" 2>/dev/null)" = "1" ]; then
