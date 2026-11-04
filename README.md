@@ -232,7 +232,7 @@ The hidden **`.C2C/`** folder holds optional command-line helpers for users who 
 | **[`.C2C/Revert_Netplay.sh`](.C2C/Revert_Netplay.sh)** | Symlink to the canonical [`Revert_Netplay.sh`](Revert_Netplay.sh) in the repository root, so the helpers stay together as one copy. |
 
 > [!NOTE]
-> These scripts are the **shared, canonical copies** also consumed by the companion [USB Network Manager](https://github.com/Just-Luis/BatleXP-G350_USBNetworkManager) repository, which links to them instead of storing duplicates.
+> These scripts are the **canonical copies**. The companion [USB Network Manager](https://github.com/Just-Luis/BatleXP-G350_USBNetworkManager) repository bundles its own copies of `C2C_Connection_Test.sh`, `c2c_setup.sh`, and `Revert_Netplay.sh` under `.usb_network/`, so each repository stays independently usable.
 
 ---
 
