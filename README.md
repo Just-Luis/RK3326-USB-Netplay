@@ -26,7 +26,8 @@
    * [Phase 3: In-Game RetroArch Hosting & Joining](#phase-3-in-game-retroarch-hosting--joining)
 6. [Testing & Returning to Stock](#-testing--returning-to-stock)
 7. [Troubleshooting Matrix](#-troubleshooting-matrix)
-8. [License](#-license)
+8. [Repository Contents](#-repository-contents)
+9. [License](#-license)
 
 ---
 
@@ -207,6 +208,31 @@ Run [`Revert_Netplay.sh`](Revert_Netplay.sh) from **TOOLS** (or via SSH terminal
 
 ## 📄 Detailed Guide
 For the complete technical breakdown, port monitoring mechanics, and core compatibility tips, see the **[NETPLAY_GUIDE.md](NETPLAY_GUIDE.md)**.
+
+---
+
+## 📁 Repository Contents
+
+| File / Directory | Purpose |
+| :--- | :--- |
+| **[`C2C_Netplay_Prep.sh`](C2C_Netplay_Prep.sh)** | **The main console tool.** All-in-one Netplay initializer, first-launch role wizard, embedded Device Tree generator, and live link monitor. This is the only file you need to copy to your SD card. |
+| **[`Revert_Netplay.sh`](Revert_Netplay.sh)** | Safe uninstaller. Restores the factory Device Tree, wipes generated `.dtb` profiles and role state, and resets RetroArch Netplay settings. Games and saves are untouched. |
+| **[`README.md`](README.md)** | This quick-start overview. |
+| **[`NETPLAY_GUIDE.md`](NETPLAY_GUIDE.md)** | Full technical guide: architecture, cable setup, phase-by-phase walkthrough, and troubleshooting matrix. |
+| **[`LICENSE`](LICENSE)** | MIT License. |
+
+### 🗂️ `.C2C/` — Advanced / Headless Helper Scripts
+
+The hidden **`.C2C/`** folder holds optional command-line helpers for users who prefer an SSH terminal over the gamepad UI. **You do not need this folder for normal Netplay play** — `C2C_Netplay_Prep.sh` is fully self-contained.
+
+| File | Purpose |
+| :--- | :--- |
+| **[`.C2C/C2C_Connection_Test.sh`](.C2C/C2C_Connection_Test.sh)** | Standalone link verifier: detects the USB interface, claims it from competing DHCP clients, binds `192.168.10.x`, and reports cable carrier, ping, and port 55435 status without touching RetroArch. |
+| **[`.C2C/c2c_setup.sh`](.C2C/c2c_setup.sh)** | Headless network helper: brings up the interface and applies the static C2C IP/gateway in one shot (handy for scripts, cron jobs, or remote debugging over SSH). |
+| **[`.C2C/Revert_Netplay.sh`](.C2C/Revert_Netplay.sh)** | Symlink to the canonical [`Revert_Netplay.sh`](Revert_Netplay.sh) in the repository root, so the helpers stay together as one copy. |
+
+> [!NOTE]
+> These scripts are the **shared, canonical copies** also consumed by the companion [USB Network Manager](https://github.com/Just-Luis/BatleXP-G350_USBNetworkManager) repository, which links to them instead of storing duplicates.
 
 ---
 

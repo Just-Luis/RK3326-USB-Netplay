@@ -47,7 +47,7 @@ Two handhelds connected directly together over USB communicate using an isolated
 To use wired C2C Netplay, you only need **a single script** copied onto the MicroSD cards of **both consoles**:
 * **[`C2C_Netplay_Prep.sh`](C2C_Netplay_Prep.sh):** The complete all-in-one Netplay initializer, first-launch role wizard, and diagnostic monitor.
 
-*(Note: [`USB_Network_Manager.sh`](../USB_Network_Manager.sh) is only needed if you also want PC file transfers or Wi-Fi internet tethering; pure Netplay players only need `C2C_Netplay_Prep.sh`!)*
+*(Note: the separate [USB Network Manager](https://github.com/Just-Luis/BatleXP-G350_USBNetworkManager) project is only needed if you also want PC file transfers, SFTP/Samba sharing, or Wi-Fi internet tethering. Pure Netplay players only need `C2C_Netplay_Prep.sh`.)*
 
 ---
 
@@ -256,7 +256,7 @@ Follow this exact sequence to ensure the host port is open before the client con
 | **`"Failed to initialize network"`** | RetroArch tried to use the internet Relay Server or NAT Traversal while offline. | Run `C2C_Netplay_Prep.sh` on both consoles to disable relay servers and NAT traversal in `retroarch.cfg`. |
 | **Client says `"Netplay host not found"`** | Host had not yet pressed `Start Netplay Host` when Client tried to connect. | Make sure Player 1 starts the Netplay Host **first**, then Player 2 connects. |
 | **Console shows IP `169.254.x.x`** | A background network daemon overwrote the static C2C IP address. | Run `C2C_Netplay_Prep.sh` and press `[A]` (Retest). The script will automatically delete `169.254.x.x` and re-assert `192.168.10.x`. |
-| **`CABLE LINK: NO LINK`** | 1. On dual-port consoles, cable is in the charge-only (`DC`) port.<br>2. Both consoles are in Host mode or both in Peripheral mode. | 1. Ensure dual-port handhelds use the `OTG` port (G350 has a single combined port).<br>2. Verify in `USB_Network_Manager.sh` that one console is Host and one is Peripheral. |
+| **`CABLE LINK: NO LINK`** | 1. On dual-port consoles, cable is in the charge-only (`DC`) port.<br>2. Both consoles are in Host mode or both in Peripheral mode. | 1. Ensure dual-port handhelds use the `OTG` port (G350 has a single combined port).<br>2. Check the `LOCAL ROLE` line in `C2C_Netplay_Prep.sh`: one console must report `[HOST]` and the other `[CLIENT]`. Tapping `[X]` flips the role and reboots the console. |
 | **Game desyncs or freezes immediately** | 1. ROM file hash mismatch.<br>2. Different emulator cores used.<br>3. Savestate or cheat enabled. | Ensure both consoles use identical ROM dumps from the same source, the same emulator core (check EmulationStation core settings), and disable all cheats. |
 | **Cannot exit `C2C_Netplay_Prep.sh`** | Single buttons like `[B]` do not exit to prevent accidental drops. | Firmly hold **`[START + SELECT]`** simultaneously for 1 second. |
-| **Switching modes did not change USB status** | Hardware mode requires a full reboot to reload the kernel Device Tree (`.dtb`). | When pressing `[X]` in `USB_Network_Manager.sh`, wait for the 5-second countdown to finish and let the console reboot completely. |
+| **Switching modes did not change USB status** | Hardware mode requires a full reboot to reload the kernel Device Tree (`.dtb`). | When tapping `[X]` (`Make P2` / `Make P1`) in `C2C_Netplay_Prep.sh`, let the 3-second countdown finish and allow the console to reboot completely, then relaunch the script. |
