@@ -45,6 +45,10 @@ EXIT_FLAG="$STATE_DIR/exit"
 RETEST_FLAG="$STATE_DIR/retest"
 WATCH_PID_FILE="$STATE_DIR/watch.pid"
 
+# Non-blocking cached peer probe (keeps the dashboard responsive on a dead link)
+PROBE_FILE="/tmp/c2c_probe"
+PROBE_LOCK="/tmp/c2c_probe.lock"
+
 mkdir -p "$STATE_DIR" 2>/dev/null
 rm -f "$EXIT_FLAG" "$RETEST_FLAG" "$STATE_DIR"/btn_* 2>/dev/null
 
@@ -54,10 +58,58 @@ cleanup() {
     fi
     sudo pkill -f "c2c_btn_watch.py" 2>/dev/null
     rm -rf "$STATE_DIR" 2>/dev/null
+    rm -f "$PROBE_LOCK" 2>/dev/null
     printf "\033[?25h" 2>/dev/null
     clear 2>/dev/null
 }
 trap cleanup EXIT INT TERM
+
+# ------------------------------------------------------------------------------
+# Non-blocking cached peer probe
+# A dead/absent peer used to stall each redraw for up to ~1.35s (ping -W 1 plus
+# the TCP probe). The probe now runs in the background and the last known
+# verdict is rendered instantly.
+# ------------------------------------------------------------------------------
+probe_start() {
+    [ -f "$PROBE_LOCK" ] && return 0
+    : > "$PROBE_LOCK" 2>/dev/null
+    local my_ip="$1" peer_ip="$2" role="$3" ifc="$4"
+    (
+        ping_res="FAIL"
+        port_res="FAIL"
+        if [ -n "$my_ip" ] && ping -c 1 -W 1 -I "$my_ip" "$peer_ip" >/dev/null 2>&1; then
+            ping_res="OK"
+            if [ "$role" == "peripheral" ]; then
+                if timeout 0.7 bash -c '(exec 3<>/dev/tcp/192.168.10.1/55435) 2>/dev/null'; then
+                    port_res="OK"
+                fi
+            else
+                if (exec 3<>/dev/tcp/127.0.0.1/55435) 2>/dev/null; then
+                    port_res="OK"
+                fi
+            fi
+        fi
+        printf '%s %s %s\n' "$ping_res" "$port_res" "$(date +%s)" > "$PROBE_FILE.tmp" 2>/dev/null
+        mv -f "$PROBE_FILE.tmp" "$PROBE_FILE" 2>/dev/null
+        rm -f "$PROBE_LOCK" 2>/dev/null
+    ) &
+}
+
+probe_read() {
+    local pr nr ts now
+    pr=""; nr=""; ts=0
+    if [ -f "$PROBE_FILE" ]; then
+        read -r pr nr ts _ < "$PROBE_FILE" 2>/dev/null
+    fi
+    now=$(date +%s)
+    case "$ts" in ''|*[!0-9]*) ts=0 ;; esac
+
+    if [ -z "$pr" ] || [ $((now - ts)) -gt 3 ]; then
+        probe_start "$1" "$2" "$3" "$4"
+    fi
+
+    printf '%s %s' "$pr" "$nr"
+}
 
 # ------------------------------------------------------------------------------
 # Autonomous Device Tree (DTB) Generator
@@ -653,17 +705,21 @@ check_status() {
     if [ "$(cat "/sys/class/net/$IFACE/carrier" 2>/dev/null)" = "1" ]; then
         CARRIER_STR="${C_GREEN}CONNECTED [CARRIER OK]${C_RESET}"
 
-        if ping -c 1 -W 1 -I "$MY_IP" "$PEER_IP" >/dev/null 2>&1; then
+        # Never block the UI: render the cached verdict and refresh in the background
+        local probe_ping probe_port
+        read -r probe_ping probe_port <<< "$(probe_read "$MY_IP" "$PEER_IP" "$ROLE" "$IFACE")"
+
+        if [ "$probe_ping" = "OK" ]; then
             PING_STR="${C_GREEN}ONLINE [OK]${C_RESET}"
 
             if [ "$ROLE" == "peripheral" ]; then
-                if timeout 0.35 bash -c '(exec 3<>/dev/tcp/192.168.10.1/55435) 2>/dev/null'; then
+                if [ "$probe_port" = "OK" ]; then
                     NETPLAY_STATUS="${C_GREEN}> HOST ACTIVE! READY TO CONNECT!${C_RESET}"
                 else
                     NETPLAY_STATUS="${C_YELLOW}> WAITING FOR HOST TO START NETPLAY${C_RESET}"
                 fi
             else
-                if (exec 3<>/dev/tcp/127.0.0.1/55435) 2>/dev/null; then
+                if [ "$probe_port" = "OK" ]; then
                     NETPLAY_STATUS="${C_GREEN}> HOSTING ON PORT 55435 [ACTIVE]${C_RESET}"
                 else
                     NETPLAY_STATUS="${C_CYAN}> READY (Will open when you host)${C_RESET}"
@@ -719,6 +775,30 @@ check_status
 draw_screen
 
 LOOP_COUNT=0
+
+# Single-shot role switch used by every input source.
+# Previously the flag file AND the Test_Button_X poll were both evaluated in the
+# same iteration, so one physical press could trigger switch_hardware_mode()
+# twice: the second call recomputed TARGET from stale $ROLE and flipped the role
+# straight back. All paths now funnel through here, and re-entry is blocked for
+# one full second after a switch.
+ROLE_SWITCH_DEBOUNCE=0
+
+request_role_switch() {
+    local now
+    now=$(date +%s)
+    if [ $((now - ROLE_SWITCH_DEBOUNCE)) -lt 1 ]; then
+        return 1
+    fi
+    ROLE_SWITCH_DEBOUNCE=$now
+    rm -f "$STATE_DIR/btn_x" 2>/dev/null
+    switch_hardware_mode
+    init_network
+    check_status
+    draw_screen
+    return 0
+}
+
 while true; do
     LOOP_COUNT=$((LOOP_COUNT + 1))
 
@@ -733,21 +813,20 @@ while true; do
         draw_screen
     fi
 
+    # Role switch: consume the watcher flag first, then the ArkOS poll, then the
+    # keyboard. Each branch breaks out of the iteration once handled so a single
+    # press can never be counted twice.
     if [ -f "$STATE_DIR/btn_x" ]; then
         rm -f "$STATE_DIR/btn_x" 2>/dev/null
-        switch_hardware_mode
-        init_network
-        check_status
-        draw_screen
+        if request_role_switch; then
+            continue
+        fi
     fi
 
     if type Test_Button_X >/dev/null 2>&1; then
         Test_Button_X
         if [ "$?" -eq "10" ]; then
-            switch_hardware_mode
-            init_network
-            check_status
-            draw_screen
+            request_role_switch && continue
         fi
     fi
 
@@ -761,10 +840,7 @@ while true; do
             draw_screen
             ;;
         [xX]|3)
-            switch_hardware_mode
-            init_network
-            check_status
-            draw_screen
+            request_role_switch && continue
             ;;
     esac
     [ "$rc" -ne 0 ] && [ "$rc" -le 128 ] && sleep 0.05
